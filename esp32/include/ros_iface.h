@@ -6,7 +6,6 @@
 //               /launcher/cmd    LauncherCommand
 //   publishes   /turret/state    TurretState      50 Hz
 //               /launcher/state  LauncherState    5 Hz + on change
-//               /range/target    Range            15 Hz
 //               /system/faults   Fault            on event
 #pragma once
 

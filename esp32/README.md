@@ -47,11 +47,30 @@ LED: slow blink = waiting for the agent, on = connected, fast blink = e-stop.
 | `src/ros_iface.cpp` | the only file that uses micro-ROS: topics, callbacks, timestamps | Razvi |
 | `src/safety.cpp` | e-stop, arm switch, 250 ms heartbeat watchdog | Razvi |
 | `src/axes.cpp` | yaw/pitch: homing, soft limits, position/velocity modes (FastAccelStepper) | TT |
-| `src/launcher.cpp` | feeder, cocking, FIRE with interlocks, jam detection | Razvi |
-| `src/sensors.cpp` | ball, cocked, range sensor (+ simulation) | Razvi |
+| `src/launcher.cpp` | slip gear cocking (DRV8871 + encoder), feed, FIRE with interlocks, jam detection | Razvi |
+| `src/sensors.cpp` | cocking motor encoder = slip gear angle (+ simulation) | Razvi |
 | `src/faults.cpp` | queue of faults for `/system/faults` | Razvi |
 
 Find your work, from this folder: `grep -rn "TODO(Razvi)" src include` (or TT).
+
+## Launcher (mechanics/BARREL/40 mm ball)
+
+No feeder servo, no ball sensor, no cocked switch. The JGA25-370 encoder gives the slip gear
+angle (0 deg = first tooth meets the rack, 180 deg = release), all angles in `config.h`:
+
+1. **LOAD** turns the gear to the hold (170 deg) and brakes. The plunger clears the holder at
+   150 deg and the next ball drops in (`LOADING`, 150 ms), then `READY`.
+2. **FIRE** turns past 180 deg: the spring fires, the gear stops at 195 deg (`FIRED`).
+3. **UNLOAD** turns back slowly and lets the spring down. A fed ball stays in the barrel.
+4. Balls are counted (`MAGAZINE_CAPACITY`). **RESET** = the holder was refilled.
+
+**Gear homing.** After power-up the gear angle is unknown. As soon as the Pi is connected and
+the arm switch is ON, the ESP32 turns the gear slowly until the spring lets go (the encoder
+speed jumps) and parks it at 195 deg. That is one real release, so:
+
+- power up with the holder **empty** (the firmware assumes 0 balls until RESET),
+- switch the arm switch ON and wait a few seconds (one empty "shot"),
+- fill the holder, then RESET (`/operator/reset` while the mission manager is in IDLE).
 
 ## Rules
 

@@ -1,10 +1,11 @@
-// Sensors: ball-in-chamber, cocked, range (doc stages S2, S10).        OWNER: Razvi
-// With SIM_HARDWARE they are simulated from the launcher's actuator outputs.
+// Sensors: cocking motor encoder = slip gear angle (doc stages S9, S10).        OWNER: Razvi
+// There is no ball sensor and no cocked switch: the launcher works from the gear angle.
+// The range sensor is on the Pi (pingpong_sensors/range_node).
+// With SIM_HARDWARE the encoder is simulated from the cocking motor output.
 #pragma once
 #include <stdint.h>
 
 void sensors_setup();
 void sensors_update(uint32_t now_ms);
-bool sensor_ball();    // ball in the chamber
-bool sensor_cocked();  // spring cocked
-bool sensor_range(float &meters);  // returns false when there is no valid reading
+int32_t sensor_cock_counts();  // accumulated encoder counts, + = cocking direction
+float sensor_cock_speed();     // [counts/s], updated every 20 ms

@@ -30,22 +30,22 @@
 #define PIN_YAW_HOME_SWITCH 32       // INPUT_PULLUP, pressed = LOW
 #define PIN_PITCH_HOME_SWITCH 33
 
-#define PIN_FEEDER_SERVO 23
-#define PIN_COCK_MOTOR_A 18          // DC motor driver inputs (e.g. DRV8871)
-#define PIN_COCK_MOTOR_B 19
-#define PIN_COCKED_SENSOR 16         // INPUT_PULLUP, cocked = LOW
-#define PIN_BALL_SENSOR 17           // INPUT_PULLUP, ball present = LOW
+#define PIN_COCK_MOTOR_A 18          // DRV8871 IN1 (PWM forward = cocking direction)
+#define PIN_COCK_MOTOR_B 19          // DRV8871 IN2 (PWM reverse); IN1 = IN2 = HIGH brakes
+#define PIN_COCK_ENC_A 16            // JGA25-370 Hall encoder, channel A (3.3 V logic)
+#define PIN_COCK_ENC_B 17            // channel B
 
 #define PIN_ESTOP_SENSE 35           // input only, external pull-up; HIGH = e-stop PRESSED (NC loop open)
 #define PIN_ARM_SWITCH 39            // input only, external pull-up; LOW = armed
 
-// Range sensor: TODO(Razvi) when the radar is chosen (UART2 or I2C on 21/22).
+// No feeder servo and no ball / cocked sensors: the plunger is the feed gate and the
+// cocking motor encoder gives the slip gear angle. The range sensor (VL53L1X) is on the Pi.
 
 // ---------------------------------------------------------------- axes (doc section 8.3)
 // Angles in radians. yaw positive = counter-clockwise from above, pitch positive = barrel up.
-#define STEPS_PER_REV 3200.0f        // 200 full steps x 16 microsteps, PLACEHOLDER
-#define YAW_GEAR_RATIO 4.0f          // motor turns per head turn, PLACEHOLDER
-#define PITCH_GEAR_RATIO 4.0f
+#define STEPS_PER_REV 3200.0f        // 17HS4401S-0.9: 400 full steps x 8 microsteps (TMC2209 MS1=MS2=GND)
+#define YAW_GEAR_RATIO 3.0f          // motor turns per head turn, printed gears, PLACEHOLDER
+#define PITCH_GEAR_RATIO 3.0f
 #define YAW_INVERT_DIR false
 #define PITCH_INVERT_DIR false
 
@@ -65,21 +65,39 @@
 #define HOMING_TIMEOUT_MS 20000
 
 // ---------------------------------------------------------------- launcher (doc section 11)
-#define FEEDER_SERVO_CLOSED_US 1000
-#define FEEDER_SERVO_OPEN_US 1700
-#define FEEDER_OPEN_MS 150           // gate open time, one ball drops
-#define BALL_CONFIRM_TIMEOUT_MS 500  // no ball after this -> magazine empty
-#define COCK_TIMEOUT_MS 2500         // cocked sensor not reached -> JAM
-#define FIRE_RELEASE_TIMEOUT_MS 300  // spring not released -> JAM
-#define BALL_EXIT_TIMEOUT_MS 200     // ball still in chamber after release -> JAM
-#define COCK_MOTOR_DUTY 255          // 0..255
+// Slip gear angle in degrees, 0 = first tooth meets the rack, 180 = last tooth releases.
+// See mechanics/BARREL/40 mm ball/parts (sheets 1, 3, 4).
+#define COCK_ENC_PPR 11.0f           // encoder pulses per MOTOR turn (x4 quadrature in software)
+#define COCK_GEARBOX_RATIO 90.0f     // motor turns per output turn, from the motor label, PLACEHOLDER
+#define COCK_COUNTS_PER_REV (COCK_ENC_PPR * 4.0f * COCK_GEARBOX_RATIO)
+
+#define COCK_CLEAR_DEG 150.0f        // plunger has cleared the holder opening, the ball drops
+#define COCK_SLOW_DEG 145.0f         // slow down from here to stop precisely at the hold
+#define COCK_HOLD_DEG 170.0f         // pre-cocked hold, 10 deg before release
+#define COCK_HOLD_TOL_DEG 2.0f       // re-cock if the spring pushes the gear back further than this
+#define COCK_RELEASE_DEG 180.0f      // last tooth leaves the rack
+#define COCK_FIRED_DEG 195.0f        // stop here after a shot (bare half under the rack)
+
+#define COCK_DUTY 255                // 0..255 PWM, normal cocking
+#define COCK_SLOW_DUTY 90            // approach to the hold, re-cock, homing
+#define COCK_UNLOAD_DUTY 70          // reverse, lets the spring down slowly
+
+#define FEED_WAIT_MS 150             // ball drop into the barrel: 0.09 s + margin
+#define MAGAZINE_CAPACITY 5          // balls in a full holder (no ball sensor: counted)
+
+#define COCK_TIMEOUT_MS 3000         // hold angle not reached -> JAM
+#define FIRE_RELEASE_TIMEOUT_MS 300  // release angle not reached -> JAM
+#define UNLOAD_TIMEOUT_MS 3000
+#define GEAR_HOMING_TIMEOUT_MS 6000  // more than one slow turn without a release -> JAM
+#define RELEASE_SPEED_JUMP 1.6f      // homing: speed after / before > this = the spring let go
+#define RELEASE_DETECT_LAG_S 0.03f   // the jump is seen ~1.5 speed samples late, measure on the gear
+#define STALL_MS 150                 // no encoder movement while driving for this long = stalled
 
 // ---------------------------------------------------------------- publish rates
 #define TURRET_STATE_PERIOD_MS 20    // 50 Hz
 #define LAUNCHER_STATE_PERIOD_MS 200 // 5 Hz + on every change
-#define RANGE_PERIOD_MS 66           // 15 Hz
 
 #if SIM_HARDWARE
-#define SIM_RANGE_M 2.5f             // simulated range sensor reading
-#define SIM_MAGAZINE_BALLS 10
+#define SIM_COCK_RPM 60.0f           // simulated output speed at full duty, no load
+#define SIM_GEAR_START_DEG 250.0f    // gear angle at power-up (unknown on the real robot)
 #endif

@@ -10,7 +10,6 @@
 #include <pingpong_interfaces/msg/fault.h>
 #include <pingpong_interfaces/msg/launcher_command.h>
 #include <pingpong_interfaces/msg/launcher_state.h>
-#include <pingpong_interfaces/msg/range.h>
 #include <pingpong_interfaces/msg/turret_command.h>
 #include <pingpong_interfaces/msg/turret_state.h>
 
@@ -19,7 +18,6 @@
 #include "faults.h"
 #include "launcher.h"
 #include "safety.h"
-#include "sensors.h"
 
 #define TS(name) ROSIDL_GET_MSG_TYPE_SUPPORT(pingpong_interfaces, msg, name)
 
@@ -32,15 +30,14 @@ rcl_allocator_t allocator;
 rclc_support_t support;
 rcl_node_t node;
 rclc_executor_t executor;
-rcl_publisher_t turret_pub, launcher_pub, range_pub, fault_pub;
+rcl_publisher_t turret_pub, launcher_pub, fault_pub;
 rcl_subscription_t turret_sub, launcher_sub;
-rcl_timer_t turret_timer, launcher_timer, range_timer;
+rcl_timer_t turret_timer, launcher_timer;
 
 pingpong_interfaces__msg__TurretCommand turret_cmd;
 pingpong_interfaces__msg__LauncherCommand launcher_cmd;
 pingpong_interfaces__msg__TurretState turret_state;
 pingpong_interfaces__msg__LauncherState launcher_state;
-pingpong_interfaces__msg__Range range_msg;
 pingpong_interfaces__msg__Fault fault_msg;
 
 // micro-ROS has no dynamic memory: every string field needs a buffer we own
@@ -104,14 +101,6 @@ void publish_launcher(rcl_timer_t *, int64_t) {
   ignore(rcl_publish(&launcher_pub, &launcher_state, NULL));
 }
 
-void publish_range(rcl_timer_t *, int64_t) {
-  float m;
-  range_msg.valid = sensor_range(m);
-  range_msg.range = m;
-  stamp(range_msg.header.stamp);
-  ignore(rcl_publish(&range_pub, &range_msg, NULL));
-}
-
 void publish_faults() {
   FaultEvent f;
   while (fault_pop(f)) {
@@ -137,7 +126,6 @@ bool ros_create() {
 
   CHECK(rclc_publisher_init_default(&turret_pub, &node, TS(TurretState), "/turret/state"));
   CHECK(rclc_publisher_init_default(&launcher_pub, &node, TS(LauncherState), "/launcher/state"));
-  CHECK(rclc_publisher_init_default(&range_pub, &node, TS(Range), "/range/target"));
   CHECK(rclc_publisher_init_default(&fault_pub, &node, TS(Fault), "/system/faults"));
   CHECK(rclc_subscription_init_default(&turret_sub, &node, TS(TurretCommand), "/turret/cmd"));
   CHECK(rclc_subscription_init_default(&launcher_sub, &node, TS(LauncherCommand), "/launcher/cmd"));
@@ -146,24 +134,18 @@ bool ros_create() {
                                  publish_turret, true));
   CHECK(rclc_timer_init_default2(&launcher_timer, &support,
                                  RCL_MS_TO_NS(LAUNCHER_STATE_PERIOD_MS), publish_launcher, true));
-  CHECK(rclc_timer_init_default2(&range_timer, &support, RCL_MS_TO_NS(RANGE_PERIOD_MS),
-                                 publish_range, true));
 
   executor = rclc_executor_get_zero_initialized_executor();
-  CHECK(rclc_executor_init(&executor, &support.context, 5, &allocator));
+  CHECK(rclc_executor_init(&executor, &support.context, 4, &allocator));
   CHECK(rclc_executor_add_subscription(&executor, &turret_sub, &turret_cmd, on_turret_cmd, ON_NEW_DATA));
   CHECK(rclc_executor_add_subscription(&executor, &launcher_sub, &launcher_cmd, on_launcher_cmd,
                                        ON_NEW_DATA));
   CHECK(rclc_executor_add_timer(&executor, &turret_timer));
   CHECK(rclc_executor_add_timer(&executor, &launcher_timer));
-  CHECK(rclc_executor_add_timer(&executor, &range_timer));
 
   set_string(turret_cmd.header.frame_id, turret_cmd_frame, sizeof(turret_cmd_frame));
   set_string(launcher_cmd.header.frame_id, launcher_cmd_frame, sizeof(launcher_cmd_frame));
   set_const_string(turret_state.header.frame_id, "base_link");
-  set_const_string(range_msg.header.frame_id, "range_link");
-  set_const_string(range_msg.sensor_id, SIM_HARDWARE ? "esp32_sim" : "esp32");
-  range_msg.field_of_view = 0.2f;  // TODO(Razvi): from the radar datasheet
   set_const_string(fault_msg.source, "esp32");
   set_string(fault_msg.message, fault_text, sizeof(fault_text));
 
@@ -176,13 +158,11 @@ void ros_destroy() {
   ignore(rmw_uros_set_context_entity_destroy_session_timeout(ctx, 0));  // agent may be gone
   ignore(rcl_publisher_fini(&turret_pub, &node));
   ignore(rcl_publisher_fini(&launcher_pub, &node));
-  ignore(rcl_publisher_fini(&range_pub, &node));
   ignore(rcl_publisher_fini(&fault_pub, &node));
   ignore(rcl_subscription_fini(&turret_sub, &node));
   ignore(rcl_subscription_fini(&launcher_sub, &node));
   ignore(rcl_timer_fini(&turret_timer));
   ignore(rcl_timer_fini(&launcher_timer));
-  ignore(rcl_timer_fini(&range_timer));
   ignore(rclc_executor_fini(&executor));
   ignore(rcl_node_fini(&node));
   ignore(rclc_support_fini(&support));
