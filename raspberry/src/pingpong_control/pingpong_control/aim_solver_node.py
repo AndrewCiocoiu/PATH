@@ -7,8 +7,9 @@ Subscribes:  /target/state   TargetState
 Publishes:   /aim/solution   AimSolution   (one per TargetState, 30 Hz)
 
 Steps: ballistic elevation from range -> lead for moving targets -> camera-to-barrel correction.
-Without a valid range the solution just points at the target (good enough to TRACK,
-the fire permission blocks firing).
+Without a valid range the elevation is computed for default_range_m (good enough to TRACK,
+the fire permission blocks firing). This also points the range sensor, which is tilted down
+from the barrel, at the target, so a real range arrives.
 """
 import math
 
@@ -23,10 +24,12 @@ class AimSolverNode(Node):
 
     def __init__(self):
         super().__init__('aim_solver_node')
-        self.declare_parameter('muzzle_speed', 8.0)        # [m/s] TODO(Andrei): measure (T19)
+        self.declare_parameter('muzzle_speed', 7.9)        # [m/s] TODO(Andrei): measure (T19)
+        self.declare_parameter('drag_k', 0.14)             # [1/m] air drag, 0 = no drag (ballistics.py)
         self.declare_parameter('yaw_offset_rad', 0.0)      # barrel vs camera, from calibration (T23)
         self.declare_parameter('pitch_offset_rad', 0.0)
         self.declare_parameter('use_lead', True)
+        self.declare_parameter('default_range_m', 2.0)     # [m] used until the range sensor sees the target
 
         self.turret = None
         self.pub = self.create_publisher(AimSolution, '/aim/solution', 10)
@@ -43,15 +46,15 @@ class AimSolverNode(Node):
         p = lambda name: self.get_parameter(name).value  # noqa: E731
 
         yaw, pitch, tof = t.yaw_bearing, t.pitch_bearing, 0.0
-        if t.range_valid:
-            d = t.range * math.cos(t.pitch_bearing)
-            h = t.range * math.sin(t.pitch_bearing)
-            elev = elevation_angle(d, h, p('muzzle_speed'))
-            if elev is None:
-                sol.valid = False                          # out of reach
-            else:
-                pitch = elev
-                tof = time_of_flight(d, elev, p('muzzle_speed'))
+        rng = t.range if t.range_valid else p('default_range_m')
+        d = rng * math.cos(t.pitch_bearing)
+        h = rng * math.sin(t.pitch_bearing)
+        elev = elevation_angle(d, h, p('muzzle_speed'), drag_k=p('drag_k'))
+        if elev is None:
+            sol.valid = False                              # out of reach
+        else:
+            pitch = elev
+            tof = time_of_flight(d, elev, p('muzzle_speed'), drag_k=p('drag_k'))
         if p('use_lead'):
             yaw += t.yaw_rate * tof
             pitch += t.pitch_rate * tof

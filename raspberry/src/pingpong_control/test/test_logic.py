@@ -15,6 +15,34 @@ def test_elevation_hits_target():
 
 def test_out_of_reach():
     assert elevation_angle(100.0, 0.0, 5.0) is None
+    assert elevation_angle(3.0, 0.0, 5.0, drag_k=0.14) is None  # 5 m/s cannot reach 3 m with drag
+
+
+def simulate_height(d, elev, v, k, dt=1e-5):
+    """2-D simulation with quadratic drag: height and time when the ball reaches d."""
+    x = y = t = 0.0
+    vx, vy = v * math.cos(elev), v * math.sin(elev)
+    while x < d:
+        s = math.hypot(vx, vy)
+        vx -= k * s * vx * dt
+        vy -= (G + k * s * vy) * dt
+        x += vx * dt
+        y += vy * dt
+        t += dt
+    return y, t
+
+
+def test_drag_model_matches_simulation():
+    v, k = 7.9, 0.14  # 40 mm ball, launcher_calculations.tex
+    for d in (1.0, 2.0, 3.0):
+        a = elevation_angle(d, 0.0, v, drag_k=k)
+        y, t = simulate_height(d, a, v, k)
+        assert abs(math.degrees(math.atan2(y, d))) < 0.3, d   # hits within 0.3 deg
+        assert abs(time_of_flight(d, a, v, drag_k=k) - t) < 0.01, d
+
+
+def test_drag_raises_the_barrel():
+    assert elevation_angle(3.0, 0.0, 7.9, drag_k=0.14) > elevation_angle(3.0, 0.0, 7.9) + 0.08
 
 
 def ready_inputs():
