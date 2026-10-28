@@ -1,0 +1,1 @@
+# colcon must not build the copy of pingpong_interfaces inside the firmware

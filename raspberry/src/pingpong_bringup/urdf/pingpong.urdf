@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!--
+  Project PingPong kinematic model (doc section 8.3).        OWNER: TT
+  All dimensions are PLACEHOLDERS. TODO(TT): take them from the CAD once the head is designed,
+  and the camera / range sensor offsets from the calibration (T23).
+  base_link: on the yaw axis, x forward, y left, z up (REP 103).
+  pitch_joint axis is -y so that a POSITIVE pitch raises the barrel (doc 8.3).
+-->
+<robot name="pingpong">
+  <link name="base_link"/>
+  <link name="yaw_link"/>
+  <link name="pitch_link"/>
+  <link name="barrel_link"/>
+  <link name="camera_link"/>
+  <link name="camera_optical"/>
+  <link name="range_link"/>
+
+  <joint name="yaw_joint" type="revolute">
+    <parent link="base_link"/>
+    <child link="yaw_link"/>
+    <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-2.8" upper="2.8" effort="1" velocity="2"/>
+  </joint>
+
+  <joint name="pitch_joint" type="revolute">
+    <parent link="yaw_link"/>
+    <child link="pitch_link"/>
+    <origin xyz="0 0 0.08" rpy="0 0 0"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-0.35" upper="0.8" effort="1" velocity="1.5"/>
+  </joint>
+
+  <joint name="barrel_joint" type="fixed">
+    <parent link="pitch_link"/>
+    <child link="barrel_link"/>
+    <origin xyz="0.15 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="pitch_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.12 -0.05 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- optical frame: z forward, x right, y down -->
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_optical"/>
+    <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+  </joint>
+
+  <joint name="range_joint" type="fixed">
+    <parent link="pitch_link"/>
+    <child link="range_link"/>
+    <origin xyz="0.12 0 0.04" rpy="0 0 0"/>
+  </joint>
+</robot>

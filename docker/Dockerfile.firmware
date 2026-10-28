@@ -1,0 +1,16 @@
+# PlatformIO for the ESP32 firmware (micro-ROS). Nobody has to install PlatformIO locally.
+FROM docker.io/library/python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir platformio==6.1.18 \
+    # what micro_ros_platformio installs at build time (it cannot as a normal user):
+    && pip install --no-cache-dir catkin-pkg lark-parser colcon-common-extensions \
+        importlib-resources pyyaml pytz markupsafe==2.0.1 empy==3.3.4
+
+ENV PLATFORMIO_CORE_DIR=/ws/esp32/.platformio_core
+WORKDIR /ws/esp32
+COPY fw-entrypoint.sh /fw-entrypoint.sh
+RUN chmod +x /fw-entrypoint.sh
+ENTRYPOINT ["/fw-entrypoint.sh"]

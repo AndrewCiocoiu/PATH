@@ -1,0 +1,64 @@
+# Project PingPong parameters. One block per node.
+# Change values here, not in the Python files. Restart the launch file to apply
+# (or at runtime: ros2 param set /<node> <name> <value>).
+# Every parameter is documented next to its declare_parameter() in the node source.
+
+camera_node:                       # Sofian
+  ros__parameters:
+    width: 640
+    height: 480
+    fps: 30.0
+    horizontal_fov_deg: 66.0
+
+detector_node:                     # Sofian
+  ros__parameters:
+    min_pixels: 20
+
+target_tracker_node:               # Sofian
+  ros__parameters:
+    alpha: 0.6
+    beta: 0.1
+    lost_timeout_s: 0.5
+    min_confidence: 0.3
+
+aim_solver_node:                   # Andrei
+  ros__parameters:
+    muzzle_speed: 8.0              # m/s, measure in T19
+    yaw_offset_rad: 0.0            # from calibration T23
+    pitch_offset_rad: 0.0
+    use_lead: true
+
+tracking_controller_node:          # Andrei
+  ros__parameters:
+    kp: 4.0
+    ki: 0.5
+    max_rate: 2.0
+    dead_band_rad: 0.002
+    search_yaw_amplitude: 1.0
+    search_period_s: 8.0
+    search_pitch: 0.05
+
+mission_manager_node:              # Andrei  (doc sections 9.2 and 10)
+  ros__parameters:
+    confirm_frames: 5
+    target_lost_s: 1.0
+    aim_timeout_s: 3.0
+    fire_timeout_s: 1.0
+    fire:                          # fire permission, doc section 10
+      min_confidence: 0.6
+      min_track_age: 10
+      max_aim_error_rad: 0.0087    # 0.5 deg
+      min_aim_ok_cycles: 3
+      range_min_m: 1.0
+      range_max_m: 4.0
+      cooldown_s: 2.0
+
+mock_hw_node:                      # Razvi (only with sim:=true)
+  ros__parameters:
+    arm_switch: true
+    magazine_balls: 10
+    target_range: 2.5
+    target_yaw: 0.4
+    target_pitch: 0.05
+    target_motion_amplitude: 0.15
+    target_motion_period_s: 10.0

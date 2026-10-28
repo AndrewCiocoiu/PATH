@@ -1,0 +1,6 @@
+raspberry/build/
+raspberry/install/
+raspberry/log/
+__pycache__/
+*.pyc
+rosbag2_*/
