@@ -8,6 +8,7 @@
 
 Arguments:
     sim        true: mock_hw_node + synthetic camera.   false: micro-ROS agent (ESP32) + real camera
+               + range_node (VL53L1X on the Pi)
     port, baud serial port of the ESP32 (sim:=false only), baud must match firmware config.h
     autonomy   false: no aim/controller/mission manager (for teleop and hardware tests)
     foxglove   true: start foxglove_bridge (ws://<pi-ip>:8765)
@@ -53,6 +54,8 @@ def generate_launch_description():
         node('pingpong_control', 'tracking_controller_node', condition=IfCondition(autonomy)),
         node('pingpong_control', 'mission_manager_node', condition=IfCondition(autonomy)),
         node('pingpong_control', 'safety_monitor_node', condition=IfCondition(autonomy)),
+        # S2: range sensor on the Pi (Razvi). In simulation mock_hw_node publishes /range/target.
+        node('pingpong_sensors', 'range_node', condition=UnlessCondition(sim)),
         # S8-S10: hardware (Razvi). Simulation: mock_hw_node. Real: micro-ROS agent <-> ESP32.
         node('pingpong_hw_bridge', 'mock_hw_node', condition=IfCondition(sim)),
         Node(package='micro_ros_agent', executable='micro_ros_agent', output='screen',

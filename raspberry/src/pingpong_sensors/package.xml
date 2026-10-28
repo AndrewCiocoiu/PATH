@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>pingpong_sensors</name>
+  <version>0.1.0</version>
+  <description>Sensors wired to the Raspberry Pi: VL53L1X range sensor (stage S2). Owner: Razvi.</description>
+  <maintainer email="razvi@todo.todo">Razvi</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>pingpong_interfaces</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -8,7 +8,7 @@ camera_node:                       # Sofian
     width: 640
     height: 480
     fps: 30.0
-    horizontal_fov_deg: 66.0
+    horizontal_fov_deg: 54.0       # OV5647 standard lens, check yours (wide lens: more)
 
 detector_node:                     # Sofian
   ros__parameters:
@@ -23,7 +23,8 @@ target_tracker_node:               # Sofian
 
 aim_solver_node:                   # Andrei
   ros__parameters:
-    muzzle_speed: 8.0              # m/s, measure in T19
+    muzzle_speed: 7.9              # m/s, launcher_calculations.tex; measure in T19
+    drag_k: 0.14                   # 1/m, 40 mm ball (0.094 for the 20 mm ball)
     yaw_offset_rad: 0.0            # from calibration T23
     pitch_offset_rad: 0.0
     use_lead: true
@@ -50,13 +51,23 @@ mission_manager_node:              # Andrei  (doc sections 9.2 and 10)
       max_aim_error_rad: 0.0087    # 0.5 deg
       min_aim_ok_cycles: 3
       range_min_m: 1.0
-      range_max_m: 4.0
+      range_max_m: 3.5             # spec 1-3 m; the VL53L1X gets unreliable further out
       cooldown_s: 2.0
+
+range_node:                        # Razvi (only with sim:=false), VL53L1X on the Pi I2C bus
+  ros__parameters:
+    i2c_bus: 1
+    rate_hz: 15.0
+    distance_mode: 3               # long
+    roi_spads: 4                   # 4x4 = narrowest cone, about 15 deg
+    fov_deg: 15.0
+    window: 5
+    max_m: 4.0
 
 mock_hw_node:                      # Razvi (only with sim:=true)
   ros__parameters:
     arm_switch: true
-    magazine_balls: 10
+    magazine_balls: 5              # holder capacity, as if filled after power-up
     target_range: 2.5
     target_yaw: 0.4
     target_pitch: 0.05

@@ -211,7 +211,11 @@ class MissionManagerNode(Node):
             self.last_load_at = self.now()
             self.send_launcher(LauncherCommand.LOAD)          # retried every 2 s while EMPTY
         if self.launcher is not None and self.launcher.magazine_empty:
-            self.message = 'magazine empty'
+            # no ball sensor: the ESP32 counts balls, RESET tells it the holder was filled
+            if self.reset_requested:
+                self.reset_requested = False
+                self.send_launcher(LauncherCommand.RESET)
+            self.message = 'magazine empty: fill the holder, then /operator/reset'
         elif not self.armed():
             self.message = 'disarmed' + ('' if self.hw_armed() else ' (hardware arm switch OFF)')
         elif self.launcher_is(LauncherState.READY):
@@ -266,7 +270,6 @@ class MissionManagerNode(Node):
 
     def state_RELOAD(self):
         if self.launcher.magazine_empty and not self.launcher.ball_present:
-            self.message = 'magazine empty'
             return S.IDLE
         if self.launcher_is(LauncherState.JAM):
             return self.raise_fault(Fault.LAUNCHER_JAM, 'launcher jam')

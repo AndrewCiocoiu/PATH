@@ -50,9 +50,11 @@
     <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
   </joint>
 
+  <!-- VL53L1X tilted 12 deg DOWN from the barrel: when aiming, the barrel is 5-20 deg above
+       the target (ballistic elevation), and the 15 deg cone must still see the target. -->
   <joint name="range_joint" type="fixed">
     <parent link="pitch_link"/>
     <child link="range_link"/>
-    <origin xyz="0.12 0 0.04" rpy="0 0 0"/>
+    <origin xyz="0.12 0 0.04" rpy="0 0.21 0"/>
   </joint>
 </robot>

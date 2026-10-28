@@ -10,7 +10,9 @@ Extra for the synthetic camera:
     Publishes:   /sim/target_truth  geometry_msgs/PointStamped, where the simulated ball target is
 
 Simulates: axis speed/acceleration limits, soft limits, homing, 250 ms heartbeat
-watchdog, launcher sequence with the timings of section 11, ESP32-side fire interlocks.
+watchdog, ESP32-side fire interlocks, and the slip gear launcher like esp32/src/launcher.cpp:
+gear homing once (arm switch ON), LOAD = cock to the hold + a ball drops in (no feeder, no
+ball sensor), balls counted, RESET = holder refilled. /range/target stands in for range_node.
 
 Play with it at runtime, e.g.:
     ros2 param set /mock_hw_node estop true          # press the emergency stop
@@ -55,12 +57,14 @@ class MockHwNode(Node):
         super().__init__('mock_hw_node')
         self.declare_parameter('estop', False)
         self.declare_parameter('arm_switch', True)
-        self.declare_parameter('magazine_balls', 10)
+        self.declare_parameter('magazine_balls', 5)              # holder full at start (after RESET)
         self.declare_parameter('target_range', 2.5)                # [m]
         self.declare_parameter('target_yaw', 0.4)                  # [rad] centre of target motion
         self.declare_parameter('target_pitch', 0.05)
         self.declare_parameter('target_motion_amplitude', 0.15)    # [rad]
         self.declare_parameter('target_motion_period_s', 10.0)
+        self.declare_parameter('range_fov_deg', 15.0)              # VL53L1X cone (range_node)
+        self.declare_parameter('range_tilt_deg', 12.0)             # sensor axis below the barrel (URDF)
 
         self.yaw = Axis(random.uniform(-0.5, 0.5), -2.8, 2.8, 2.0, 8.0)
         self.pitch = Axis(random.uniform(-0.2, 0.2), -0.35, 0.8, 1.5, 6.0)
@@ -74,6 +78,9 @@ class MockHwNode(Node):
         self.ls = LauncherState()
         self.ls.state = L.EMPTY
         self.balls = self.get_parameter('magazine_balls').value
+        self.gear_homed = False
+        self.gear_homing_timer = 0.0
+        self.unloading = False
         self.launcher_timer = 0.0        # time left in the current timed launcher state
         self.last_launcher_seq = 0
         self.last_published_launcher = None
@@ -122,15 +129,19 @@ class MockHwNode(Node):
         self.last_launcher_seq = msg.seq
         self.ls.last_cmd_seq = msg.seq
         c = msg.command
-        if c == LauncherCommand.LOAD and self.ls.state in (L.EMPTY, L.FIRED):
-            if self.balls > 0:
-                self.ls.state, self.launcher_timer = L.LOADING, 0.15
-        elif c == LauncherCommand.COCK and self.ls.state == L.LOADED:
-            self.ls.state, self.launcher_timer = L.COCKING, 1.0
+        if c in (LauncherCommand.LOAD, LauncherCommand.COCK) and self.ls.state in (L.EMPTY, L.FIRED):
+            if self.balls <= 0:
+                self.fault(Fault.FIRE_REFUSED, Fault.WARNING, True, 'LOAD refused: magazine empty')
+            elif not self.gear_homed:
+                self.fault(Fault.FIRE_REFUSED, Fault.WARNING, True, 'LOAD refused: gear not homed')
+            else:
+                self.ls.state, self.launcher_timer = L.COCKING, 0.5      # cock to the hold
         elif c == LauncherCommand.FIRE:
             refused = []
             if self.ls.state != L.READY:
                 refused.append('not READY')
+            elif not self.ls.ball_present:
+                refused.append('no ball (magazine)')
             if not self.param('arm_switch'):
                 refused.append('arm switch OFF')
             if self.param('estop'):
@@ -141,10 +152,12 @@ class MockHwNode(Node):
                 self.fault(Fault.FIRE_REFUSED, Fault.WARNING, True, 'FIRE refused: ' + ', '.join(refused))
             else:
                 self.ls.state, self.launcher_timer = L.FIRING, 0.07
-        elif c == LauncherCommand.UNLOAD:
-            self.ls.state = L.EMPTY
-        elif c == LauncherCommand.RESET and self.ls.state == L.JAM:
-            self.ls.state = L.EMPTY
+        elif c == LauncherCommand.UNLOAD and self.ls.state == L.READY:
+            self.ls.state, self.launcher_timer, self.unloading = L.COCKING, 0.5, True
+        elif c == LauncherCommand.RESET:
+            if self.ls.state == L.JAM:
+                self.ls.state = L.EMPTY
+            self.balls = self.param('magazine_balls')                   # holder refilled
 
     # ------------------------------------------------------------ simulation
     def step(self):
@@ -202,19 +215,28 @@ class MockHwNode(Node):
 
     def step_launcher(self):
         s = self.ls
+        # gear homing once: one slow turn through a release, needs the arm switch
+        if not self.gear_homed and s.state == L.EMPTY and self.param('arm_switch') \
+                and self.heartbeat_ok() and not self.param('estop'):
+            self.gear_homing_timer += DT
+            if self.gear_homing_timer > 1.5:
+                self.gear_homed = True
         if self.launcher_timer > 0:
             self.launcher_timer -= DT
             if self.launcher_timer <= 0:
-                if s.state == L.LOADING:
-                    self.balls -= 1
-                    s.state, self.launcher_timer = L.COCKING, 1.0     # LOAD = feed + cock (doc P4)
-                elif s.state == L.COCKING:
+                if s.state == L.COCKING and self.unloading:
+                    s.state, s.ball_present, self.unloading = L.EMPTY, False, False
+                elif s.state == L.COCKING:                         # at the hold, ball dropping
+                    s.ball_present = self.balls > 0
+                    self.balls = max(0, self.balls - 1)
+                    s.state, self.launcher_timer = L.LOADING, 0.15
+                elif s.state == L.LOADING:
                     s.state = L.READY
                 elif s.state == L.FIRING:
                     s.state = L.FIRED
                     s.shots_fired += 1
-        s.ball_present = s.state in (L.LOADED, L.COCKING, L.READY)
-        s.cocked = s.state == L.READY
+                    s.ball_present = False
+        s.cocked = s.state in (L.LOADING, L.READY)
         s.magazine_empty = self.balls <= 0
         s.arm_switch = self.param('arm_switch')
         self.publish_launcher()
@@ -229,16 +251,17 @@ class MockHwNode(Node):
 
     def publish_range(self):
         yaw, pitch = self.target_bearing()
-        # [rad] half-angle of the simulated beam. Wide on purpose: while aiming, the barrel is
-        # raised by the ballistic elevation, so a narrow sensor on the barrel misses the target.
-        # Real design question for the radar choice (T03/T05).
-        beam = 0.25
+        r = self.param('target_range')
+        # While aiming the barrel is 5-20 deg above the target (ballistic elevation), so the
+        # sensor is tilted down (range_tilt_deg) to keep the target inside its cone.
+        beam = math.radians(self.param('range_fov_deg')) / 2 + math.atan(0.1 / r)  # + 20 cm target
+        axis_pitch = self.pitch.pos - math.radians(self.param('range_tilt_deg'))
         m = Range()
         m.header.stamp = self.get_clock().now().to_msg()
         m.header.frame_id = 'range_link'
-        m.field_of_view = 2 * beam
+        m.field_of_view = math.radians(self.param('range_fov_deg'))
         m.sensor_id = 'mock'
-        m.valid = abs(yaw - self.yaw.pos) < beam and abs(pitch - self.pitch.pos) < beam
+        m.valid = abs(yaw - self.yaw.pos) < beam and abs(pitch - axis_pitch) < beam
         m.range = self.param('target_range') + random.gauss(0.0, 0.02) if m.valid else 0.0
         self.range_pub.publish(m)
 
