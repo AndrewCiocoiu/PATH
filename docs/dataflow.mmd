@@ -1,0 +1,45 @@
+%% Source of docs/dataflow.png. Re-export after editing:
+%%   podman run --rm -v "$PWD/docs:/data:Z" docker.io/minlag/mermaid-cli -i dataflow.mmd -o dataflow.png -s 2 -b white
+%%{init: {"flowchart": {"wrappingWidth": 400}}}%%
+flowchart TD
+    subgraph PI["🍓 Raspberry Pi 5 · ROS2"]
+        direction TD
+        subgraph SOF["👁️ Vision + Tracking · Sofian"]
+            CAM["<b>camera_node</b><br/>S1 · OV5647 · 30 Hz"]
+            DET["<b>detector_node</b><br/>S3 · OpenCV / YOLO"]
+            TRK["<b>target_tracker_node</b><br/>S4 · tracking + fusion"]
+        end
+        subgraph RAZ["📏 Range · Razvi"]
+            RNG["<b>range_node</b><br/>S2 · VL53L1X (I2C) · 15 Hz<br/><i>simulation: mock_hw_node</i>"]
+        end
+        subgraph AND["🎯 Control · Andrei"]
+            AIM["<b>aim_solver_node</b><br/>S5 · ballistics with drag + lead"]
+            MM["<b>mission_manager_node</b><br/>S6 · state machine"]
+            TC["<b>tracking_controller_node</b><br/>S7 · PI control · 50 Hz"]
+        end
+    end
+    HW["⚡ <b>ESP32 (micro-ROS)</b> · Razvi, TT<br/>S8–S10 · 2× NEMA 17 (TMC2209) · slip gear launcher (JGA25 + encoder, DRV8871) · safety · 1 kHz<br/><i>simulation: mock_hw_node</i>"]
+
+    CAM -->|"/camera/image_raw"| DET
+    DET -->|"/vision/detections"| TRK
+    RNG -->|"/range/target"| TRK
+    TRK -->|"/target/state"| AIM
+    TRK -->|"/target/state"| MM
+    AIM -->|"/aim/solution"| TC
+    AIM -->|"/aim/solution"| MM
+    MM -->|"/system/state"| TC
+    TC ==>|"/turret/cmd · 50 Hz · heartbeat"| HW
+    MM ==>|"/launcher/cmd"| HW
+    HW -.->|"/turret/state"| TRK
+    HW -.->|"/turret/state · /launcher/state · /system/faults"| MM
+
+    classDef sofian fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef andrei fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef razvi fill:#ffedd5,stroke:#ea580c,color:#7c2d12
+    class CAM,DET,TRK sofian
+    class AIM,MM,TC andrei
+    class HW,RNG razvi
+    style PI fill:none,stroke:#94a3b8,stroke-dasharray:5 5
+    style SOF fill:none,stroke:#2563eb
+    style AND fill:none,stroke:#16a34a
+    style RAZ fill:none,stroke:#ea580c
